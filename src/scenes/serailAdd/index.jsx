@@ -10,6 +10,16 @@ import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import Switch from "@mui/material/Switch";
 import FormControlLabel from "@mui/material/FormControlLabel"; // Import FormControlLabel
+import {
+  collection,
+  addDoc,
+  storage,
+  ref,
+  serverTimestamp,
+  uploadBytes,
+  firestore,
+  getDownloadURL,
+} from "../../firebase/firebaseinit";
 
 const RootContainer = styled("div")({
   display: "flex",
@@ -21,7 +31,8 @@ const RootContainer = styled("div")({
 
 const StyledCard = styled(Card)({
   backgroundColor: "#3C5B6F", // Card background color
-  padding: "32px",
+  paddingLeft: "40px",
+  paddingRight: "40px",
 });
 
 const FormContainer = styled("form")({
@@ -31,6 +42,11 @@ const FormContainer = styled("form")({
 
 const InputField = styled(TextField)({
   marginBottom: "16px",
+});
+
+const FileInput = styled("input")({
+  marginBottom: "16px",
+  display: "none",
 });
 
 const ButtonContainer = styled("div")({
@@ -47,11 +63,68 @@ export default function Add() {
   const [discount, setDiscount] = useState("");
   const [active, setActive] = useState(false);
   const [warranty, setWarranty] = useState("");
+  const [notes, setNotes] = useState("");
+  const [images, setImages] = useState([]);
+  const [pdfFile, setPdfFile] = useState(null);
 
-  const handleSubmit = (event) => {
+  const handleImageChange = (event) => {
+    const files = event.target.files;
+    if (files.length + images.length <= 3) {
+      setImages([...images, ...files]);
+    } else {
+      alert("You can only add up to 3 images.");
+    }
+  };
+
+  const handlePdfChange = (event) => {
+    const file = event.target.files[0];
+    setPdfFile(file);
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    // Handle form submission
-    console.log("Form submitted");
+    try {
+      // Upload images to Firebase Storage
+      const imageUrls = await Promise.all(
+        images.map(async (image) => {
+          const storageRef = ref(storage, `images/${image.name}`);
+          await uploadBytes(storageRef, image);
+          return getDownloadURL(storageRef);
+        })
+      );
+
+      // Upload PDF file to Firebase Storage
+      let pdfUrl = null;
+      if (pdfFile) {
+        const pdfRef = ref(storage, `pdf/${pdfFile.name}`);
+        await uploadBytes(pdfRef, pdfFile);
+        pdfUrl = await getDownloadURL(pdfRef);
+      }
+
+      // Save form data and file URLs to Firestore
+      const docRef = await addDoc(collection(firestore, "products"), {
+        serialNumber,
+        discount,
+        active,
+        warranty,
+        notes,
+        images: imageUrls,
+        pdfUrl,
+        createdAt: serverTimestamp(),
+      });
+
+      console.log("Document written with ID: ", docRef.id);
+      // Reset form fields
+      setSerialNumber("");
+      setDiscount("");
+      setActive(false);
+      setWarranty("");
+      setNotes("");
+      setImages([]);
+      setPdfFile(null);
+    } catch (error) {
+      console.error("Error adding document: ", error);
+    }
   };
 
   return (
@@ -103,6 +176,36 @@ export default function Add() {
                 <MenuItem value={68}>6 year</MenuItem>
               </Select>
             </FormControl>
+            <InputField
+              label="Notes"
+              variant="outlined"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              multiline
+              rows={4}
+              InputProps={{ style: { color: "white" } }}
+            />
+            <StyledButton
+              variant="contained"
+              component="label"
+              style={{ marginBottom: "16px" }}
+            >
+              Add Images
+              <FileInput
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                multiple
+              />
+            </StyledButton>
+            <StyledButton
+              variant="contained"
+              component="label"
+              style={{ marginBottom: "16px" }}
+            >
+              Add PDF
+              <FileInput type="file" accept=".pdf" onChange={handlePdfChange} />
+            </StyledButton>
             <FormControlLabel
               control={
                 <Switch checked={active} onChange={() => setActive(!active)} />

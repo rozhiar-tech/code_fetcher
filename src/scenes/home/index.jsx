@@ -49,6 +49,11 @@ export default function Home() {
                 Add Products
               </StyledButton>
             </Link>
+            <Link to="/edit-products">
+              <StyledButton variant="contained" color="secondary">
+                Edit Products
+              </StyledButton>
+            </Link>
           </ButtonContainer>
         </CardContent>
       </StyledCard>
